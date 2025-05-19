@@ -8,6 +8,81 @@ import { WebView } from 'react-native-webview';
 
 const WEBSITE_URL = 'https://zynoflixott.com';
 
+// JavaScript for minimal file handling - no previews, just functional upload
+const minimalistFileHandlerJS = `
+// Simple file registry 
+window.zynoflixActiveFileInputs = window.zynoflixActiveFileInputs || new Map();
+
+// Register file input
+function registerFileInput(inputElement) {
+    const inputId = inputElement.id || inputElement.name || ('file_input_' + new Date().getTime());
+    if (!inputElement.id) {
+        inputElement.id = inputId;
+    }
+    window.zynoflixActiveFileInputs.set(inputId, {
+        element: inputElement,
+        files: []
+    });
+    return inputId;
+}
+`;
+
+// Improved form submission with cleaner approach
+const enhancedFormSubmissionJS = `
+// Professional form submission handling
+function enhanceFormSubmission() {
+    // Apply to all forms
+    document.querySelectorAll('form:not([data-zynoflix-enhanced])').forEach(form => {
+        form.setAttribute('data-zynoflix-enhanced', 'true');
+        
+        // Direct form submission listener
+        form.addEventListener('submit', function(event) {
+            // Notify WebView about submission
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'formSubmit',
+                data: {
+                    action: form.action || window.location.href,
+                    method: form.method || 'GET',
+                    formId: form.id || '',
+                    isSubmitting: true
+                }
+            }));
+        });
+    });
+}
+
+// Initialize form enhancement
+enhanceFormSubmission();
+
+// Watch for dynamic content changes
+const observer = new MutationObserver(mutations => {
+    let needsEnhancement = false;
+    
+    for (const mutation of mutations) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === 1 && 
+                    (node.tagName === 'FORM' || 
+                     (node.querySelector && node.querySelector('form:not([data-zynoflix-enhanced])')))) {
+                    needsEnhancement = true;
+                    break;
+                }
+            }
+            if (needsEnhancement) break;
+        }
+    }
+    
+    if (needsEnhancement) {
+        enhanceFormSubmission();
+    }
+});
+
+observer.observe(document.body, { 
+    childList: true, 
+    subtree: true 
+});
+`;
+
 // Mutex lock mechanism to prevent concurrent picker operations
 class PickerLock {
     private locked: boolean = false;
@@ -52,6 +127,8 @@ export default function WebViewScreen() {
     const webViewRef = useRef<WebView>(null);
     const [isLoading, setIsLoading] = useState(true);
     const pickerLock = useRef(new PickerLock()).current;
+    // Keep track of the last active file input
+    const lastActiveInputId = useRef<string | null>(null);
 
     // Handle back button press for Android
     useEffect(() => {
@@ -145,320 +222,204 @@ export default function WebViewScreen() {
         return mimeTypes[extension] || 'application/octet-stream';
     };
 
+    // Handle form submission directly
+    const handleFormSubmission = (formAction: string, formMethod: string, isSignup: boolean) => {
+        if (isSignup) {
+            console.log('Handling signup form submission');
+
+            // Inject code to help with signup form submission
+            const signupFormHelperJS = `
+                (function() {
+                    console.log('Assisting with signup form submission');
+                    
+                    // Ensure form submission completes properly
+                    try {
+                        // If there are errors displayed on the page, show them
+                        const errorElements = document.querySelectorAll('.error, .alert-danger, .invalid-feedback, [role="alert"]');
+                        if (errorElements.length > 0) {
+                            console.error('Form submission errors found:', Array.from(errorElements).map(el => el.textContent));
+                        }
+                        
+                        // If there's a submit button that needs to be clicked, click it
+                        const pendingSubmitBtn = document.querySelector('form button[type="submit"]:not(:disabled), form input[type="submit"]:not(:disabled)');
+                        if (pendingSubmitBtn) {
+                            console.log('Clicking pending submit button');
+                            pendingSubmitBtn.click();
+                        }
+                    } catch (error) {
+                        console.error('Error assisting form submission:', error);
+                    }
+                })();
+                true;
+            `;
+
+            webViewRef.current?.injectJavaScript(signupFormHelperJS);
+        }
+    };
+
+    // Handle form errors
+    const handleFormError = (errors: string[]) => {
+        if (errors.length > 0) {
+            // Show error to user
+            const errorMessage = errors.join('\n');
+            Alert.alert('Form Submission Error', errorMessage);
+        }
+    };
+
     // Handle file selection
     const handleFileSelection = async (accept: string, multiple: boolean, targetId: string) => {
         if (pickerLock.isLocked()) {
-            console.log('Picker already in use, cannot select file');
             return false;
         }
 
         const lockAcquired = await pickerLock.acquire();
-        if (!lockAcquired) {
-            console.log('Failed to acquire lock for file selection');
-            return false;
-        }
+        if (!lockAcquired) return false;
 
         try {
             if (Platform.OS === 'android') {
                 ToastAndroid.show('Selecting file...', ToastAndroid.SHORT);
             }
 
-            let result;
-            const isImageAccept = accept?.includes('image');
-            const isVideoAccept = accept?.includes('video');
+            lastActiveInputId.current = targetId;
 
-            if (isImageAccept) {
-                // Use image picker for images
+            // Optimize picker selection based on file type
+            let result;
+
+            if (accept?.includes('image')) {
                 result = await ImagePicker.launchImageLibraryAsync({
                     mediaTypes: ImagePicker.MediaTypeOptions.Images,
                     allowsEditing: !multiple,
-                    quality: 0.8,
+                    quality: 0.7,
                     allowsMultipleSelection: multiple
                 });
-            } else if (isVideoAccept) {
-                // Use image picker for videos
+            } else if (accept?.includes('video')) {
                 result = await ImagePicker.launchImageLibraryAsync({
                     mediaTypes: ImagePicker.MediaTypeOptions.Videos,
                     allowsMultipleSelection: multiple
                 });
             } else {
-                // Use document picker for other files
                 result = await DocumentPicker.getDocumentAsync({
                     type: accept || '*/*',
                     multiple
                 });
             }
 
-            if (!result.canceled && result.assets.length > 0) {
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Processing files...', ToastAndroid.SHORT);
-                }
-
-                // Process all files in a consistent way
-                const processedFiles = await Promise.all(
-                    result.assets.map(async (asset: any) => {
-                        try {
-                            // Standardize file information
-                            const uri = asset.uri;
-                            const fileName = asset.fileName || asset.name || `file_${Date.now()}`;
-                            const mimeType = asset.mimeType || getMimeType(fileName);
-
-                            // Process each file
-                            return await processFile(uri, fileName, mimeType);
-                        } catch (error) {
-                            console.error('Error processing asset:', error);
-                            return null;
-                        }
-                    })
-                );
-
-                // Filter out any files that failed to process
-                const validFiles = processedFiles.filter(file => file !== null);
-
-                if (validFiles.length === 0) {
-                    Alert.alert('Error', 'Failed to process selected files.');
-                    pickerLock.release();
-                    return false;
-                }
-
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Uploading files...', ToastAndroid.SHORT);
-                }
-
-                // Check if we're dealing with image or video
-                const isImageOrVideo = validFiles.some(file =>
-                    file.type.startsWith('image/') || file.type.startsWith('video/')
-                );
-
-                // Create JavaScript to inject the files into the website's file input
-                const jsCode = `
-                    (function() {
-                        try {
-                            // Find the target file input
-                            let fileInput = document.getElementById('${targetId}');
-                            
-                            // If we can't find the input by ID, find the most recently used file input
-                            if (!fileInput) {
-                                const inputs = document.querySelectorAll('input[type="file"]');
-                                if (inputs.length > 0) {
-                                    fileInput = inputs[inputs.length - 1];
-                                } else {
-                                    throw new Error('No file input found');
-                                }
-                            }
-                            
-                            // Create files from base64 data
-                            const fileArray = [];
-                            const previewUrls = []; // Store blob URLs for preview
-                            
-                            ${validFiles.map((file, index) => `
-                                // Process file ${index}
-                                try {
-                                    const binaryString${index} = atob('${file.base64}');
-                                    const bytes${index} = new Uint8Array(binaryString${index}.length);
-                                    for (let i = 0; i < binaryString${index}.length; i++) {
-                                        bytes${index}[i] = binaryString${index}.charCodeAt(i);
-                                    }
-                                    const blob${index} = new Blob([bytes${index}.buffer], { type: '${file.type}' });
-                                    const file${index} = new File([blob${index}], "${file.name}", { type: '${file.type}' });
-                                    fileArray.push(file${index});
-                                    
-                                    // Create a URL for preview
-                                    const url${index} = URL.createObjectURL(blob${index});
-                                    previewUrls.push({url: url${index}, type: '${file.type}', name: '${file.name}'});
-                                    
-                                    console.log('Processed file ${index}: ${file.name}');
-                                } catch(fileError) {
-                                    console.error('Error processing file ${index}:', fileError);
-                                }
-                            `).join('')}
-                            
-                            console.log('Total processed files:', fileArray.length);
-                            
-                            // Create a DataTransfer object and add files
-                            try {
-                                const dataTransfer = new DataTransfer();
-                                fileArray.forEach(file => dataTransfer.items.add(file));
-                                
-                                // Assign the files to the input and trigger change event
-                                fileInput.files = dataTransfer.files;
-                                
-                                // Add a class to mark this input as having files
-                                fileInput.classList.add('has-files');
-                                
-                                // Try to find parent form
-                                const form = fileInput.closest('form');
-                                if (form) {
-                                    console.log('Found parent form:', form);
-                                }
-                                
-                                // Trigger events on the input
-                                ['change', 'input'].forEach(eventType => {
-                                    const event = new Event(eventType, { bubbles: true });
-                                    fileInput.dispatchEvent(event);
-                                });
-                                
-                                // Find submit button
-                                let submitButton = null;
-                                if (form) {
-                                    submitButton = form.querySelector('button[type="submit"]');
-                                    if (!submitButton) {
-                                        submitButton = form.querySelector('input[type="submit"]');
-                                    }
-                                }
-                                
-                                // For images and videos, create a preview
-                                if (${isImageOrVideo}) {
-                                    // Find the preview container - look for common patterns
-                                    let previewContainer = null;
-                                    
-                                    // First try to find the thumbnail or preview element
-                                    const possiblePreviews = [
-                                        document.querySelector('.thumbnail'),
-                                        document.querySelector('.preview'),
-                                        document.querySelector('[class*="preview"]'),
-                                        document.querySelector('[class*="thumbnail"]'),
-                                        document.querySelector('[id*="preview"]'),
-                                        document.querySelector('[id*="thumbnail"]'),
-                                        document.querySelector('.image-preview'),
-                                        document.querySelector('.file-preview'),
-                                        // Look for elements near the file input
-                                        fileInput.parentElement,
-                                        fileInput.parentElement?.parentElement
-                                    ];
-                                    
-                                    // Try to find a valid preview container
-                                    for (const element of possiblePreviews) {
-                                        if (element) {
-                                            previewContainer = element;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // If no container found, create one
-                                    if (!previewContainer) {
-                                        previewContainer = document.createElement('div');
-                                        previewContainer.className = 'dynamic-preview-container';
-                                        previewContainer.style.width = '100%';
-                                        previewContainer.style.marginTop = '10px';
-                                        previewContainer.style.marginBottom = '10px';
-                                        previewContainer.style.padding = '10px';
-                                        previewContainer.style.border = '1px solid #ccc';
-                                        previewContainer.style.borderRadius = '5px';
-                                        
-                                        // Insert after the file input
-                                        if (fileInput.parentElement) {
-                                            fileInput.parentElement.insertBefore(previewContainer, fileInput.nextSibling);
-                                        } else {
-                                            document.body.appendChild(previewContainer);
-                                        }
-                                    }
-                                    
-                                    // Clear previous previews
-                                    if (previewContainer.querySelector('.dynamic-preview')) {
-                                        const oldPreviews = previewContainer.querySelectorAll('.dynamic-preview');
-                                        oldPreviews.forEach(preview => preview.remove());
-                                    }
-                                    
-                                    // Create preview elements
-                                    previewUrls.forEach(item => {
-                                        const previewItem = document.createElement('div');
-                                        previewItem.className = 'dynamic-preview';
-                                        previewItem.style.marginBottom = '10px';
-                                        
-                                        if (item.type.startsWith('image/')) {
-                                            // Image preview
-                                            const img = document.createElement('img');
-                                            img.src = item.url;
-                                            img.style.maxWidth = '100%';
-                                            img.style.maxHeight = '300px';
-                                            img.style.objectFit = 'contain';
-                                            previewItem.appendChild(img);
-                                        } else if (item.type.startsWith('video/')) {
-                                            // Video preview
-                                            const video = document.createElement('video');
-                                            video.src = item.url;
-                                            video.controls = true;
-                                            video.autoplay = false;
-                                            video.style.maxWidth = '100%';
-                                            video.style.maxHeight = '300px';
-                                            previewItem.appendChild(video);
-                                        }
-                                        
-                                        // Add filename
-                                        const filename = document.createElement('div');
-                                        filename.textContent = item.name;
-                                        filename.style.fontSize = '12px';
-                                        filename.style.marginTop = '5px';
-                                        previewItem.appendChild(filename);
-                                        
-                                        previewContainer.appendChild(previewItem);
-                                    });
-                                    
-                                    // If we have a submit button, show file is ready to upload
-                                    if (submitButton) {
-                                        submitButton.style.backgroundColor = '#4CAF50';
-                                        submitButton.style.color = 'white';
-                                    }
-                                }
-                                
-                                console.log('Successfully attached', fileArray.length, 'files to input');
-                                
-                                // Show message on webpage
-                                const message = document.createElement('div');
-                                message.style.position = 'fixed';
-                                message.style.bottom = '20px';
-                                message.style.left = '0';
-                                message.style.right = '0';
-                                message.style.backgroundColor = 'rgba(0,0,0,0.7)';
-                                message.style.color = 'white';
-                                message.style.padding = '10px';
-                                message.style.textAlign = 'center';
-                                message.style.zIndex = '9999';
-                                message.textContent = 'Files attached successfully. You can now submit the form.';
-                                document.body.appendChild(message);
-                                
-                                // Remove the message after 5 seconds
-                                setTimeout(() => {
-                                    if (document.body.contains(message)) {
-                                        document.body.removeChild(message);
-                                    }
-                                }, 5000);
-                                
-                                // Auto submit if this is an upload-only form (no other inputs)
-                                if (form) {
-                                    const otherInputs = form.querySelectorAll('input:not([type="file"]):not([type="submit"]):not([type="hidden"])');
-                                    const isUploadOnlyForm = otherInputs.length === 0;
-                                    
-                                    if (isUploadOnlyForm && submitButton) {
-                                        // Simulate click on submit button after a short delay
-                                        setTimeout(() => {
-                                            submitButton.click();
-                                        }, 1000);
-                                    }
-                                }
-                            } catch(e) {
-                                console.error('Error setting up file transfer:', e);
-                            }
-                        } catch (error) {
-                            console.error('Error in main file attachment process:', error);
-                        }
-                    })();
-                    true;
-                `;
-
-                // Inject the JavaScript code
-                webViewRef.current?.injectJavaScript(jsCode);
-
-                if (Platform.OS === 'android') {
-                    ToastAndroid.show('Files attached successfully!', ToastAndroid.LONG);
-                }
-
+            if (result.canceled || !result.assets || result.assets.length === 0) {
                 pickerLock.release();
-                return true;
+                return false;
             }
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Processing files...', ToastAndroid.SHORT);
+            }
+
+            // Process files with optimized parallel processing
+            const processedFiles = await Promise.all(
+                result.assets.map(async (asset: any) => {
+                    try {
+                        const uri = asset.uri;
+                        const fileName = asset.fileName || asset.name || `file_${Date.now()}`;
+                        const mimeType = asset.mimeType || getMimeType(fileName);
+                        return await processFile(uri, fileName, mimeType);
+                    } catch (error) {
+                        return null;
+                    }
+                })
+            );
+
+            const validFiles = processedFiles.filter(file => file !== null);
+
+            if (validFiles.length === 0) {
+                Alert.alert('Error', 'Failed to process selected files.');
+                pickerLock.release();
+                return false;
+            }
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Uploading files...', ToastAndroid.SHORT);
+            }
+
+            // Optimized JS code injection with minimal memory usage - no previews
+            const jsCode = `
+                // Reuse minimal functions
+                // ${minimalistFileHandlerJS}
+                
+                (function() {
+                    try {
+                        // Find target file input efficiently
+                        const fileInput = document.getElementById('${targetId}') || 
+                                        document.querySelector('input[type="file"]:last-of-type');
+                        
+                        if (!fileInput) throw new Error('No file input found');
+                        
+                        // Create and add files efficiently
+                        const dataTransfer = new DataTransfer();
+                        
+                        // Process files with minimal variable creation
+                        ${validFiles.map((file, index) => `
+                            try {
+                                // Convert base64 to binary efficiently
+                                const binary${index} = atob('${file.base64}');
+                                const bytes${index} = new Uint8Array(binary${index}.length);
+                                for (let i = 0; i < binary${index}.length; i++) bytes${index}[i] = binary${index}.charCodeAt(i);
+                                
+                                // Create blob and file
+                                const blob${index} = new Blob([bytes${index}.buffer], {type:'${file.type}'});
+                                dataTransfer.items.add(new File([blob${index}], '${file.name}', {type:'${file.type}'}));
+                            } catch(e) {}
+                        `).join('')}
+                        
+                        // Set files and trigger events
+                        fileInput.files = dataTransfer.files;
+                        fileInput.classList.add('has-files');
+                        fileInput.dispatchEvent(new Event('change', {bubbles:true}));
+                        
+                        // Register ID for future reference
+                        registerFileInput(fileInput);
+                        
+                        // Find parent form and submit button for auto-submission
+                        const form = fileInput.closest('form');
+                        const submitButton = form ? 
+                            (form.querySelector('button[type="submit"]') || form.querySelector('input[type="submit"]')) : 
+                            null;
+                        
+                        // Show minimal toast notification
+                        const toast = document.createElement('div');
+                        toast.textContent = '${validFiles.length} file${validFiles.length > 1 ? 's' : ''} attached';
+                        toast.style.cssText = 'position:fixed;bottom:15px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:4px;font-size:14px;z-index:9999;opacity:0;transition:opacity 0.3s';
+                        document.body.appendChild(toast);
+                        
+                        // Fade in and out animation
+                        setTimeout(() => {
+                            toast.style.opacity = '0.9';
+                            setTimeout(() => {
+                                toast.style.opacity = '0';
+                                setTimeout(() => toast.remove(), 300);
+                            }, 2000);
+                        }, 10);
+                        
+                        // Auto submit upload-only forms
+                        if (form && submitButton) {
+                            const otherInputs = form.querySelectorAll('input:not([type="file"]):not([type="submit"]):not([type="hidden"])');
+                            if (otherInputs.length === 0) {
+                                setTimeout(() => submitButton.click(), 800);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error in file handling:', error);
+                    }
+                })();
+                true;
+            `;
+
+            // webViewRef.current?.injectJavaScript(jsCode);
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Files attached successfully!', ToastAndroid.SHORT);
+            }
+
             pickerLock.release();
-            return false;
+            return true;
         } catch (error) {
             console.error('Error selecting file:', error);
             Alert.alert('Error', 'Failed to select file. Please try again.');
@@ -496,76 +457,109 @@ export default function WebViewScreen() {
     // Observe DOM for file inputs and clicks
     const observeDomForFileInputs = `
     (function() {
-        // Better debounce function
+        // Initialize tracking system
+        window.zynoflixActiveFileInputs = window.zynoflixActiveFileInputs || new Map();
+        
+        // Debounce function
         function debounce(func, wait) {
             let timeout;
-            let isCalled = false;
-            
-            return function executedFunction(...args) {
-                if (isCalled) return;
-                
-                isCalled = true;
-                const later = () => {
-                    timeout = null;
-                    isCalled = false;
-                    func(...args);
-                };
-                
+            return function(...args) {
                 clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
+                timeout = setTimeout(() => func.apply(this, args), wait);
             };
         }
         
-        // Handle input click
-        const handleFileInputClick = debounce(function(event) {
+        // Register a file input
+        function registerFileInput(input) {
+            if (!input.id) {
+                input.id = 'zynoflix_file_' + Date.now();
+            }
+            
+            window.zynoflixActiveFileInputs.set(input.id, {
+                element: input
+            });
+            
+            return input.id;
+        }
+        
+        // File input click handler
+        document.addEventListener('click', function(event) {
             if (event.target.tagName === 'INPUT' && event.target.type === 'file') {
                 // Prevent default file dialog
                 event.preventDefault();
                 
-                console.log('File input clicked:', event.target);
-                
-                // Get file input properties
-                const requestData = {
-                    type: event.target.accept || '*/*',
-                    accept: event.target.accept,
-                    multiple: event.target.multiple,
-                    id: event.target.id
-                };
+                // Ensure input is registered
+                const inputId = registerFileInput(event.target);
                 
                 // Send message to React Native
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'fileInputClick',
-                    data: requestData
+                    data: {
+                        id: inputId,
+                        accept: event.target.accept || '*/*',
+                        multiple: !!event.target.multiple
+                    }
                 }));
             }
-        }, 300);
+        }, true);
         
-        // Listen for clicks with capture to get them early
-        document.addEventListener('click', handleFileInputClick, true);
+        // Submit button handler - capture all form submissions
+        document.addEventListener('click', function(event) {
+            if ((event.target.tagName === 'BUTTON' && event.target.type === 'submit') || 
+                (event.target.tagName === 'INPUT' && event.target.type === 'submit')) {
+                
+                const form = event.target.closest('form');
+                if (form) {
+                    // Let React Native know about the form submission
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'formSubmit',
+                        data: {
+                            action: form.action || window.location.href,
+                            method: form.method || 'GET',
+                            formId: form.id || ''
+                        }
+                    }));
+                }
+            }
+        }, true);
         
-        // Observe DOM for dynamically added file inputs
+        // Dynamically added file inputs observer
         const observer = new MutationObserver(function(mutations) {
+            const fileInputs = [];
+            
             mutations.forEach(function(mutation) {
                 if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach(function(node) {
                         if (node.nodeType === 1) { // Element node
-                            const fileInputs = node.querySelectorAll && node.querySelectorAll('input[type="file"]');
-                            if (fileInputs && fileInputs.length > 0) {
-                                console.log('New file input elements detected');
+                            // Direct file inputs
+                            if (node.tagName === 'INPUT' && node.type === 'file') {
+                                fileInputs.push(node);
+                            }
+                            // Nested file inputs
+                            else if (node.querySelectorAll) {
+                                node.querySelectorAll('input[type="file"]').forEach(input => {
+                                    fileInputs.push(input);
+                                });
                             }
                         }
                     });
                 }
             });
+            
+            // Register all found file inputs
+            fileInputs.forEach(input => registerFileInput(input));
         });
         
-        // Start observing the document
+        // Initial scan for file inputs
+        document.querySelectorAll('input[type="file"]').forEach(input => {
+            registerFileInput(input);
+        });
+        
+        // Start observing
         observer.observe(document.body, { 
             childList: true, 
             subtree: true 
         });
-        
-        console.log('File input observer initialized');
     })();
     true;
     `;
@@ -574,18 +568,239 @@ export default function WebViewScreen() {
         try {
             const message = JSON.parse(event.nativeEvent.data);
 
-            if (message.type === 'fileInputClick') {
-                handleFileInputRequest(JSON.stringify(message.data));
+            switch (message.type) {
+                case 'fileInputClick':
+                    handleFileInputRequest(JSON.stringify(message.data));
+                    break;
+
+                case 'formSubmit':
+                    const { action, method, isSignup } = message.data;
+                    handleFormSubmission(action, method, isSignup);
+                    break;
+
+                case 'formError':
+                    const { errors } = message.data;
+                    handleFormError(errors);
+                    break;
+
+                case 'formSuccess':
+                    const { message: successMessage } = message.data;
+                    handleFormSuccess(successMessage);
+                    break;
+
+                default:
+                    console.log('Unhandled message type:', message.type);
             }
         } catch (error) {
             console.error('Error parsing WebView message:', error);
         }
     };
 
+    // Inject custom script when WebView is loaded
+    const handleWebViewLoad = () => {
+        setIsLoading(false);
+
+        // // Professional form handling with cleaner approach
+        // const professionalFormHandlerJS = `
+        // (function() {
+        //     // Add loading styles
+        //     if (!document.getElementById('zf-styles')) {
+        //         const style = document.createElement('style');
+        //         style.id = 'zf-styles';
+        //         style.textContent = '.zf-loading{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;transition:opacity 0.3s}.zf-spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.3);border-top:3px solid #fff;border-radius:50%;animation:zf-spin 1s linear infinite;margin-bottom:12px}.zf-text{font-size:16px;font-weight:500;text-align:center;max-width:80%}@keyframes zf-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}';
+        //         document.head.appendChild(style);
+        //     }
+
+        //     // App state management
+        //     const app = {
+        //         formSubmitting: false,
+        //         loader: null,
+        //         show: function(message) {
+        //             this.hide();
+        //             const loader = document.createElement('div');
+        //             loader.className = 'zf-loading';
+
+        //             const spinner = document.createElement('div');
+        //             spinner.className = 'zf-spinner';
+
+        //             const text = document.createElement('div');
+        //             text.className = 'zf-text';
+        //             text.textContent = message || 'Processing...';
+
+        //             loader.appendChild(spinner);
+        //             loader.appendChild(text);
+        //             document.body.appendChild(loader);
+        //             this.loader = loader;
+        //         },
+        //         hide: function() {
+        //             if (this.loader) {
+        //                 this.loader.style.opacity = '0';
+        //                 setTimeout(() => {
+        //                     if (this.loader && this.loader.parentNode) {
+        //                         this.loader.parentNode.removeChild(this.loader);
+        //                         this.loader = null;
+        //                     }
+        //                 }, 300);
+        //             }
+        //         }
+        //     };
+
+        //     // Form submission handling
+        //     function setupFormHandling() {
+        //         // Store current URL
+        //         let currentUrl = location.href;
+
+        //         // Handle all forms with event delegation
+        //         document.addEventListener('submit', function(e) {
+        //             if (e.target.tagName === 'FORM') {
+        //                 // Prevent double submissions
+        //                 if (app.formSubmitting) {
+        //                     e.preventDefault();
+        //                     return;
+        //                 }
+
+        //                 app.formSubmitting = true;
+        //                 app.show('Submitting form...');
+
+        //                 // Update UI for submit buttons
+        //                 const buttons = e.target.querySelectorAll('button[type="submit"], input[type="submit"]');
+        //                 buttons.forEach(btn => {
+        //                     btn.disabled = true;
+        //                     btn.style.opacity = '0.7';
+        //                     btn.dataset.originalText = btn.tagName === 'BUTTON' ? btn.innerHTML : btn.value;
+        //                     if (btn.tagName === 'BUTTON') {
+        //                         btn.innerHTML = '<span>Please wait...</span>';
+        //                     } else {
+        //                         btn.value = 'Please wait...';
+        //                     }
+        //                 });
+
+        //                 // Handle form submission - check for completion
+        //                 const checkFormStatus = () => {
+        //                     // Check for URL change (success case)
+        //                     if (currentUrl !== location.href) {
+        //                         currentUrl = location.href;
+        //                         window.ReactNativeWebView.postMessage(JSON.stringify({
+        //                             type: 'formSuccess',
+        //                             data: { newUrl: location.href }
+        //                         }));
+        //                         return;
+        //                     }
+
+        //                     // Check for errors
+        //                     const errorElements = document.querySelectorAll('.error, .alert-danger, .invalid-feedback, [role="alert"]');
+        //                     if (errorElements.length > 0) {
+        //                         app.hide();
+        //                         app.formSubmitting = false;
+
+        //                         // Restore buttons
+        //                         buttons.forEach(btn => {
+        //                             btn.disabled = false;
+        //                             btn.style.opacity = '1';
+        //                             if (btn.tagName === 'BUTTON' && btn.dataset.originalText) {
+        //                                 btn.innerHTML = btn.dataset.originalText;
+        //                             } else if (btn.dataset.originalText) {
+        //                                 btn.value = btn.dataset.originalText;
+        //                             }
+        //                         });
+
+        //                         // Report errors
+        //                         window.ReactNativeWebView.postMessage(JSON.stringify({
+        //                             type: 'formError',
+        //                             data: { 
+        //                                 errors: Array.from(errorElements).map(el => el.textContent.trim()),
+        //                                 formId: e.target.id || ''
+        //                             }
+        //                         }));
+        //                     }
+        //                 };
+
+        //                 // Start monitoring with intervals
+        //                 const checkInterval = setInterval(() => {
+        //                     if (currentUrl !== location.href) {
+        //                         // Success - URL changed
+        //                         clearInterval(checkInterval);
+        //                         app.formSubmitting = false;
+        //                         setTimeout(() => app.hide(), 500); // Allow time for navigation
+        //                     } else if (!app.formSubmitting) {
+        //                         // Form was already processed
+        //                         clearInterval(checkInterval);
+        //                     } else {
+        //                         // Keep checking for a reasonable time
+        //                         checkFormStatus();
+        //                     }
+        //                 }, 300);
+
+        //                 // Set a timeout to stop checking
+        //                 setTimeout(() => {
+        //                     clearInterval(checkInterval);
+        //                     if (app.formSubmitting) {
+        //                         app.formSubmitting = false;
+        //                         app.hide();
+
+        //                         // Restore buttons
+        //                         buttons.forEach(btn => {
+        //                             btn.disabled = false;
+        //                             btn.style.opacity = '1';
+        //                             if (btn.tagName === 'BUTTON' && btn.dataset.originalText) {
+        //                                 btn.innerHTML = btn.dataset.originalText;
+        //                             } else if (btn.dataset.originalText) {
+        //                                 btn.value = btn.dataset.originalText;
+        //                             }
+        //                         });
+        //                     }
+        //                 }, 15000); // 15 seconds timeout
+        //             }
+        //         }, true);
+
+        //         // Handle navigation events
+        //         window.addEventListener('beforeunload', function() {
+        //             if (app.formSubmitting) {
+        //                 app.show('Navigating...');
+        //             }
+        //         });
+
+        //         window.addEventListener('pageshow', function() {
+        //             app.formSubmitting = false;
+        //             app.hide();
+        //             currentUrl = location.href;
+        //         });
+        //     }
+
+        //     // Handle direct submit button clicks
+        //     document.addEventListener('click', function(e) {
+        //         if ((e.target.tagName === 'BUTTON' && e.target.type === 'submit') || 
+        //             (e.target.tagName === 'INPUT' && e.target.type === 'submit')) {
+        //             if (!app.formSubmitting) {
+        //                 e.target.style.opacity = '0.8';
+        //             }
+        //         }
+        //     }, true);
+
+        //     // Initialize
+        //     setupFormHandling();
+
+        //     // Set webview flag cookie to help with backend detection
+        //     document.cookie = "webview=true; path=/;";
+        // })();
+        // true;
+        // `;
+
+        // webViewRef.current?.injectJavaScript(professionalFormHandlerJS);
+    };
+
+    // Handle form success with navigation feedback
+    const handleFormSuccess = (message: string) => {
+        if (Platform.OS === 'android') {
+            ToastAndroid.show(message, ToastAndroid.LONG);
+        } else {
+            Alert.alert('Success', message);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="auto" />
-
             <WebView
                 ref={webViewRef}
                 source={{ uri: WEBSITE_URL }}
@@ -594,14 +809,24 @@ export default function WebViewScreen() {
                 domStorageEnabled={true}
                 startInLoadingState={true}
                 onLoadStart={() => setIsLoading(true)}
-                onLoadEnd={() => setIsLoading(false)}
-                injectedJavaScript={observeDomForFileInputs}
+                onLoadEnd={handleWebViewLoad}
+                // injectedJavaScript={observeDomForFileInputs}
                 onMessage={handleMessage}
                 allowsFullscreenVideo={true}
                 allowsInlineMediaPlayback={true}
                 mediaPlaybackRequiresUserAction={false}
                 cacheEnabled={true}
                 pullToRefreshEnabled={true}
+                sharedCookiesEnabled={true}
+                thirdPartyCookiesEnabled={true}
+                incognito={false}
+                applicationNameForUserAgent="ZynoflixApp"
+                textZoom={100}
+                scrollEnabled={true}
+                useSharedProcessPool={true}
+                cacheMode="LOAD_CACHE_ELSE_NETWORK"
+                originWhitelist={['*']}
+                decelerationRate={0.998}
             />
         </SafeAreaView>
     );
