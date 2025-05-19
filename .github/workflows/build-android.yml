@@ -55,21 +55,6 @@ jobs:
           VERSION_CODE: ${{ github.event.inputs.version_code }}
           VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: |
-          if [ "$BUILD_TYPE" == "release" ]; then
-            PROFILE="production"
-          else
-            PROFILE="preview"
-          fi
-          
-          # Set version info if provided
-          VERSION_PARAMS=""
-          if [ -n "$VERSION_CODE" ]; then
-            VERSION_PARAMS="$VERSION_PARAMS --version-code $VERSION_CODE"
-          fi
-          
-          if [ -n "$VERSION_NAME" ]; then
-            VERSION_PARAMS="$VERSION_PARAMS --version-name $VERSION_NAME"
-          fi
           
           # Run the build
           npx eas-cli build --platform android --profile $PROFILE --local $VERSION_PARAMS
