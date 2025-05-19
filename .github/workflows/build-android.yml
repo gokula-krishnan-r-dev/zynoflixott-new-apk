@@ -1,0 +1,123 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type (debug/release)'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      version_code:
+        description: 'Version code (integer)'
+        required: false
+        type: string
+      version_name:
+        description: 'Version name (e.g., 1.0.0)'
+        required: false
+        type: string
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Setup EAS
+        run: npm install -g eas-cli
+      
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      
+      - name: Configure gradlew as executable
+        run: chmod +x android/gradlew
+      
+      - name: Build APK
+        id: build_apk
+        env:
+          BUILD_TYPE: ${{ github.event.inputs.build_type }}
+          VERSION_CODE: ${{ github.event.inputs.version_code }}
+          VERSION_NAME: ${{ github.event.inputs.version_name }}
+        run: |
+          if [ "$BUILD_TYPE" == "release" ]; then
+            PROFILE="production"
+          else
+            PROFILE="preview"
+          fi
+          
+          # Set version info if provided
+          VERSION_PARAMS=""
+          if [ -n "$VERSION_CODE" ]; then
+            VERSION_PARAMS="$VERSION_PARAMS --version-code $VERSION_CODE"
+          fi
+          
+          if [ -n "$VERSION_NAME" ]; then
+            VERSION_PARAMS="$VERSION_PARAMS --version-name $VERSION_NAME"
+          fi
+          
+          # Run the build
+          npx eas-cli build --platform android --profile $PROFILE --local $VERSION_PARAMS
+          
+          # Find the APK
+          APK_PATH=$(find ./build -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+            echo "APK built successfully at: $APK_PATH"
+            
+            # Generate filename with timestamp and build type
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            APK_FILENAME="zynoflixott-$BUILD_TYPE-$TIMESTAMP.apk"
+            mv "$APK_PATH" "$APK_FILENAME"
+            echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
+          else
+            echo "Failed to find the built APK"
+            exit 1
+          fi
+      
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zynoflixott-${{ github.event.inputs.build_type }}-apk
+          path: ${{ steps.build_apk.outputs.apk_filename }}
+          if-no-files-found: error
+          retention-days: 14
+      
+      - name: Create release (for release builds)
+        if: github.event.inputs.build_type == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.build_apk.outputs.apk_filename }}
+          name: Release ${{ github.event.inputs.version_name || format('v{0}', github.run_number) }}
+          tag_name: ${{ github.event.inputs.version_name || format('v{0}', github.run_number) }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build completion message
+        run: |
+          echo "✅ APK build completed successfully!"
+          echo "📱 Build type: ${{ github.event.inputs.build_type }}"
+          echo "📦 Artifact name: zynoflixott-${{ github.event.inputs.build_type }}-apk"
+          if [ "${{ github.event.inputs.build_type }}" == "release" ]; then
+            echo "🚀 A GitHub release has been created with the APK attached"
+          fi
+          echo "⬇️ Download the APK from the GitHub Actions artifacts section" 
