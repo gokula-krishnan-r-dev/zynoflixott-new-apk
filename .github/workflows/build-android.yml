@@ -55,25 +55,7 @@ jobs:
           VERSION_CODE: ${{ github.event.inputs.version_code }}
           VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: |
-          
-          # Run the build
-          npx eas-cli build --platform android --profile $PROFILE --local $VERSION_PARAMS
-          
-          # Find the APK
-          APK_PATH=$(find ./build -name "*.apk" | head -n 1)
-          if [ -n "$APK_PATH" ]; then
-            echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-            echo "APK built successfully at: $APK_PATH"
-            
-            # Generate filename with timestamp and build type
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            APK_FILENAME="zynoflixott-$BUILD_TYPE-$TIMESTAMP.apk"
-            mv "$APK_PATH" "$APK_FILENAME"
-            echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
-          else
-            echo "Failed to find the built APK"
-            exit 1
-          fi
+            npx eas-cli build --platform android --profile $PROFILE --local $VERSION_PARAMS
       
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
