@@ -11,7 +11,7 @@ Before using this workflow, you need to:
    - Navigate to Settings > Secrets and variables > Actions
    - Click "New repository secret"
    - Name: `EXPO_TOKEN`
-   - Value: Your Expo token (get it from https://expo.dev/accounts/[username]/settings/access-tokens)
+   - Value: Your Expo access token (get it from https://expo.dev/accounts/[username]/settings/access-tokens)
 
 ## How to Use
 
@@ -23,6 +23,17 @@ Before using this workflow, you need to:
    - **Version code** (optional): Set a custom version code (integer)
    - **Version name** (optional): Set a custom version name (e.g., 1.0.0)
 5. Click "Run workflow" to start the build
+
+## What the Workflow Does
+
+1. Sets up the build environment (Node.js, Java, and Gradle cache)
+2. Installs project dependencies
+3. Configures EAS CLI with your Expo token
+4. Builds the APK with the selected profile (preview for debug, production for release)
+5. Automatically finds the built APK file
+6. Renames it with a timestamp and build type for easy identification
+7. Makes the APK available as a downloadable artifact
+8. For release builds, creates a GitHub Release with the APK attached
 
 ## Build Output
 
@@ -37,11 +48,19 @@ Once the workflow completes successfully:
 2. Scroll down to the "Artifacts" section
 3. Click on the artifact named `zynoflixott-{build-type}-apk` to download
 
+## Troubleshooting
+
+If the workflow fails, check these common issues:
+
+- Ensure your `EXPO_TOKEN` is correctly set in repository secrets
+- Verify the Android build configuration in your project
+- Check if EAS is properly configured in your project (eas.json file)
+
 ## Customization
 
 You can customize the workflow by editing the `.github/workflows/build-android.yml` file:
 
-- Change build profiles
+- Change build profiles in the eas.json file
 - Modify retention period for artifacts
 - Add additional build parameters
 - Configure release options 

@@ -41,28 +41,104 @@ jobs:
       - name: Setup EAS
         run: npm install -g eas-cli
       
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
+      - name: Setup Java
+        uses: actions/setup-java@v3
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: 'zulu'
+          java-version: '17'
       
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Configure Gradle
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
       
       - name: Build APK
         id: build_apk
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           BUILD_TYPE: ${{ github.event.inputs.build_type }}
           VERSION_CODE: ${{ github.event.inputs.version_code }}
           VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: |
-            npx eas-cli build --platform android --profile preview --local --non-interactive
-
+          # Select profile based on build type
+          if [ "$BUILD_TYPE" == "release" ]; then
+            PROFILE="production"
+          else
+            PROFILE="preview"
+          fi
+          
+          # Set version info if provided
+          VERSION_PARAMS=""
+          if [ -n "$VERSION_CODE" ]; then
+            VERSION_PARAMS="$VERSION_PARAMS --version-code $VERSION_CODE"
+          fi
+          
+          if [ -n "$VERSION_NAME" ]; then
+            VERSION_PARAMS="$VERSION_PARAMS --version-name $VERSION_NAME"
+          fi
+          
+          # Run the build with the token explicitly set
+          echo "Starting build with profile: $PROFILE"
+          npx eas-cli build --platform android --profile $PROFILE --local --non-interactive $VERSION_PARAMS
+          
+          # Find the generated APK
+          echo "Searching for the built APK..."
+          SEARCH_PATHS="./android/app/build/outputs/apk ./.tmp/android/apk ./build"
+          
+          for SEARCH_PATH in $SEARCH_PATHS; do
+            if [ -d "$SEARCH_PATH" ]; then
+              echo "Searching in $SEARCH_PATH"
+              APK_PATH=$(find $SEARCH_PATH -name "*.apk" | head -n 1)
+              if [ -n "$APK_PATH" ]; then
+                break
+              fi
+            fi
+          done
+          
+          if [ -n "$APK_PATH" ]; then
+            echo "APK found at: $APK_PATH"
+            
+            # Generate a friendly filename with timestamp
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            APK_FILENAME="zynoflixott-$BUILD_TYPE-$TIMESTAMP.apk"
+            
+            # Create artifacts directory if it doesn't exist
+            mkdir -p ./artifacts
+            
+            # Copy APK to artifacts directory with the new name
+            cp "$APK_PATH" "./artifacts/$APK_FILENAME"
+            echo "APK copied to: ./artifacts/$APK_FILENAME"
+            
+            # Set outputs for other steps
+            echo "apk_path=./artifacts/$APK_FILENAME" >> $GITHUB_OUTPUT
+            echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
+          else
+            echo "No APK found! Listing potential build directories:"
+            ls -la ./android/app/build/ || echo "android/app/build/ not found"
+            ls -la ./.tmp/ || echo ".tmp/ not found"
+            ls -la ./build/ || echo "build/ not found"
+            ls -la ./ || echo "No files in root directory"
+            
+            echo "Failed to find the built APK"
+            exit 1
+          fi
       
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: zynoflixott-${{ github.event.inputs.build_type }}-apk
-          path: ${{ steps.build_apk.outputs.apk_filename }}
+          path: ${{ steps.build_apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 14
       
@@ -70,7 +146,7 @@ jobs:
         if: github.event.inputs.build_type == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ steps.build_apk.outputs.apk_filename }}
+          files: ${{ steps.build_apk.outputs.apk_path }}
           name: Release ${{ github.event.inputs.version_name || format('v{0}', github.run_number) }}
           tag_name: ${{ github.event.inputs.version_name || format('v{0}', github.run_number) }}
           draft: false
@@ -83,6 +159,7 @@ jobs:
           echo "✅ APK build completed successfully!"
           echo "📱 Build type: ${{ github.event.inputs.build_type }}"
           echo "📦 Artifact name: zynoflixott-${{ github.event.inputs.build_type }}-apk"
+          echo "📂 APK filename: ${{ steps.build_apk.outputs.apk_filename }}"
           if [ "${{ github.event.inputs.build_type }}" == "release" ]; then
             echo "🚀 A GitHub release has been created with the APK attached"
           fi
