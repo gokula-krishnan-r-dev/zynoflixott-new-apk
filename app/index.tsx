@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, BackHandler, Platform, SafeAreaView, StyleSheet, ToastAndroid } from 'react-native';
@@ -8,80 +9,6 @@ import { WebView } from 'react-native-webview';
 
 const WEBSITE_URL = 'https://zynoflixott.com';
 
-// JavaScript for minimal file handling - no previews, just functional upload
-const minimalistFileHandlerJS = `
-// Simple file registry 
-window.zynoflixActiveFileInputs = window.zynoflixActiveFileInputs || new Map();
-
-// Register file input
-function registerFileInput(inputElement) {
-    const inputId = inputElement.id || inputElement.name || ('file_input_' + new Date().getTime());
-    if (!inputElement.id) {
-        inputElement.id = inputId;
-    }
-    window.zynoflixActiveFileInputs.set(inputId, {
-        element: inputElement,
-        files: []
-    });
-    return inputId;
-}
-`;
-
-// Improved form submission with cleaner approach
-const enhancedFormSubmissionJS = `
-// Professional form submission handling
-function enhanceFormSubmission() {
-    // Apply to all forms
-    document.querySelectorAll('form:not([data-zynoflix-enhanced])').forEach(form => {
-        form.setAttribute('data-zynoflix-enhanced', 'true');
-        
-        // Direct form submission listener
-        form.addEventListener('submit', function(event) {
-            // Notify WebView about submission
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'formSubmit',
-                data: {
-                    action: form.action || window.location.href,
-                    method: form.method || 'GET',
-                    formId: form.id || '',
-                    isSubmitting: true
-                }
-            }));
-        });
-    });
-}
-
-// Initialize form enhancement
-enhanceFormSubmission();
-
-// Watch for dynamic content changes
-const observer = new MutationObserver(mutations => {
-    let needsEnhancement = false;
-    
-    for (const mutation of mutations) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length) {
-            for (const node of mutation.addedNodes) {
-                if (node.nodeType === 1 && 
-                    (node.tagName === 'FORM' || 
-                     (node.querySelector && node.querySelector('form:not([data-zynoflix-enhanced])')))) {
-                    needsEnhancement = true;
-                    break;
-                }
-            }
-            if (needsEnhancement) break;
-        }
-    }
-    
-    if (needsEnhancement) {
-        enhanceFormSubmission();
-    }
-});
-
-observer.observe(document.body, { 
-    childList: true, 
-    subtree: true 
-});
-`;
 
 // Mutex lock mechanism to prevent concurrent picker operations
 class PickerLock {
@@ -129,6 +56,11 @@ export default function WebViewScreen() {
     const pickerLock = useRef(new PickerLock()).current;
     // Keep track of the last active file input
     const lastActiveInputId = useRef<string | null>(null);
+    // Track video fullscreen state
+    const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
+    const [statusBarHidden, setStatusBarHidden] = useState(false);
+    // Reference to fullscreen timeout
+    const fullscreenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Handle back button press for Android
     useEffect(() => {
@@ -339,79 +271,6 @@ export default function WebViewScreen() {
                 ToastAndroid.show('Uploading files...', ToastAndroid.SHORT);
             }
 
-            // Optimized JS code injection with minimal memory usage - no previews
-            const jsCode = `
-                // Reuse minimal functions
-                // ${minimalistFileHandlerJS}
-                
-                (function() {
-                    try {
-                        // Find target file input efficiently
-                        const fileInput = document.getElementById('${targetId}') || 
-                                        document.querySelector('input[type="file"]:last-of-type');
-                        
-                        if (!fileInput) throw new Error('No file input found');
-                        
-                        // Create and add files efficiently
-                        const dataTransfer = new DataTransfer();
-                        
-                        // Process files with minimal variable creation
-                        ${validFiles.map((file, index) => `
-                            try {
-                                // Convert base64 to binary efficiently
-                                const binary${index} = atob('${file.base64}');
-                                const bytes${index} = new Uint8Array(binary${index}.length);
-                                for (let i = 0; i < binary${index}.length; i++) bytes${index}[i] = binary${index}.charCodeAt(i);
-                                
-                                // Create blob and file
-                                const blob${index} = new Blob([bytes${index}.buffer], {type:'${file.type}'});
-                                dataTransfer.items.add(new File([blob${index}], '${file.name}', {type:'${file.type}'}));
-                            } catch(e) {}
-                        `).join('')}
-                        
-                        // Set files and trigger events
-                        fileInput.files = dataTransfer.files;
-                        fileInput.classList.add('has-files');
-                        fileInput.dispatchEvent(new Event('change', {bubbles:true}));
-                        
-                        // Register ID for future reference
-                        registerFileInput(fileInput);
-                        
-                        // Find parent form and submit button for auto-submission
-                        const form = fileInput.closest('form');
-                        const submitButton = form ? 
-                            (form.querySelector('button[type="submit"]') || form.querySelector('input[type="submit"]')) : 
-                            null;
-                        
-                        // Show minimal toast notification
-                        const toast = document.createElement('div');
-                        toast.textContent = '${validFiles.length} file${validFiles.length > 1 ? 's' : ''} attached';
-                        toast.style.cssText = 'position:fixed;bottom:15px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:4px;font-size:14px;z-index:9999;opacity:0;transition:opacity 0.3s';
-                        document.body.appendChild(toast);
-                        
-                        // Fade in and out animation
-                        setTimeout(() => {
-                            toast.style.opacity = '0.9';
-                            setTimeout(() => {
-                                toast.style.opacity = '0';
-                                setTimeout(() => toast.remove(), 300);
-                            }, 2000);
-                        }, 10);
-                        
-                        // Auto submit upload-only forms
-                        if (form && submitButton) {
-                            const otherInputs = form.querySelectorAll('input:not([type="file"]):not([type="submit"]):not([type="hidden"])');
-                            if (otherInputs.length === 0) {
-                                setTimeout(() => submitButton.click(), 800);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error in file handling:', error);
-                    }
-                })();
-                true;
-            `;
-
             // webViewRef.current?.injectJavaScript(jsCode);
 
             if (Platform.OS === 'android') {
@@ -454,115 +313,63 @@ export default function WebViewScreen() {
         }
     };
 
-    // Observe DOM for file inputs and clicks
-    const observeDomForFileInputs = `
-    (function() {
-        // Initialize tracking system
-        window.zynoflixActiveFileInputs = window.zynoflixActiveFileInputs || new Map();
-        
-        // Debounce function
-        function debounce(func, wait) {
-            let timeout;
-            return function(...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), wait);
-            };
+    // Handle fullscreen state changes
+    const handleFullscreenChange = async (isFullscreen: boolean) => {
+        setIsVideoFullscreen(isFullscreen);
+        setStatusBarHidden(isFullscreen);
+
+        // Clear any existing timeout
+        if (fullscreenTimeoutRef.current) {
+            clearTimeout(fullscreenTimeoutRef.current);
+            fullscreenTimeoutRef.current = null;
         }
-        
-        // Register a file input
-        function registerFileInput(input) {
-            if (!input.id) {
-                input.id = 'zynoflix_file_' + Date.now();
-            }
-            
-            window.zynoflixActiveFileInputs.set(input.id, {
-                element: input
-            });
-            
-            return input.id;
-        }
-        
-        // File input click handler
-        document.addEventListener('click', function(event) {
-            if (event.target.tagName === 'INPUT' && event.target.type === 'file') {
-                // Prevent default file dialog
-                event.preventDefault();
-                
-                // Ensure input is registered
-                const inputId = registerFileInput(event.target);
-                
-                // Send message to React Native
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'fileInputClick',
-                    data: {
-                        id: inputId,
-                        accept: event.target.accept || '*/*',
-                        multiple: !!event.target.multiple
+
+        try {
+            if (isFullscreen) {
+                // Lock to landscape orientation when entering fullscreen
+                await ScreenOrientation.lockAsync(
+                    ScreenOrientation.OrientationLock.LANDSCAPE
+                );
+
+                // Safety timeout - if we don't get an exit fullscreen event after 5 minutes
+                // go back to default orientation (in case user exited fullscreen via OS controls)
+                fullscreenTimeoutRef.current = setTimeout(async () => {
+                    const orientation = await ScreenOrientation.getOrientationAsync();
+                    const isLandscape = orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+                        orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT;
+
+                    // Only change if still in landscape (meaning we probably missed the exit event)
+                    if (isLandscape) {
+                        await ScreenOrientation.lockAsync(
+                            ScreenOrientation.OrientationLock.DEFAULT
+                        );
+                        setStatusBarHidden(false);
+                        setIsVideoFullscreen(false);
                     }
-                }));
+                }, 5 * 60 * 1000); // 5 minutes
+            } else {
+                // Return to default orientation when exiting fullscreen
+                await ScreenOrientation.lockAsync(
+                    ScreenOrientation.OrientationLock.DEFAULT
+                );
             }
-        }, true);
-        
-        // Submit button handler - capture all form submissions
-        document.addEventListener('click', function(event) {
-            if ((event.target.tagName === 'BUTTON' && event.target.type === 'submit') || 
-                (event.target.tagName === 'INPUT' && event.target.type === 'submit')) {
-                
-                const form = event.target.closest('form');
-                if (form) {
-                    // Let React Native know about the form submission
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'formSubmit',
-                        data: {
-                            action: form.action || window.location.href,
-                            method: form.method || 'GET',
-                            formId: form.id || ''
-                        }
-                    }));
-                }
+        } catch (error) {
+            console.error('Error changing screen orientation:', error);
+        }
+    };
+
+    // Clean up on unmount
+    useEffect(() => {
+        return () => {
+            // Unlock orientation when component unmounts
+            ScreenOrientation.unlockAsync();
+
+            // Clear any timeouts
+            if (fullscreenTimeoutRef.current) {
+                clearTimeout(fullscreenTimeoutRef.current);
             }
-        }, true);
-        
-        // Dynamically added file inputs observer
-        const observer = new MutationObserver(function(mutations) {
-            const fileInputs = [];
-            
-            mutations.forEach(function(mutation) {
-                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) { // Element node
-                            // Direct file inputs
-                            if (node.tagName === 'INPUT' && node.type === 'file') {
-                                fileInputs.push(node);
-                            }
-                            // Nested file inputs
-                            else if (node.querySelectorAll) {
-                                node.querySelectorAll('input[type="file"]').forEach(input => {
-                                    fileInputs.push(input);
-                                });
-                            }
-                        }
-                    });
-                }
-            });
-            
-            // Register all found file inputs
-            fileInputs.forEach(input => registerFileInput(input));
-        });
-        
-        // Initial scan for file inputs
-        document.querySelectorAll('input[type="file"]').forEach(input => {
-            registerFileInput(input);
-        });
-        
-        // Start observing
-        observer.observe(document.body, { 
-            childList: true, 
-            subtree: true 
-        });
-    })();
-    true;
-    `;
+        };
+    }, []);
 
     const handleMessage = (event: any) => {
         try {
@@ -588,6 +395,10 @@ export default function WebViewScreen() {
                     handleFormSuccess(successMessage);
                     break;
 
+                case 'videoFullscreenChange':
+                    handleFullscreenChange(message.data.isFullscreen);
+                    break;
+
                 default:
                     console.log('Unhandled message type:', message.type);
             }
@@ -600,193 +411,167 @@ export default function WebViewScreen() {
     const handleWebViewLoad = () => {
         setIsLoading(false);
 
-        // // Professional form handling with cleaner approach
-        // const professionalFormHandlerJS = `
-        // (function() {
-        //     // Add loading styles
-        //     if (!document.getElementById('zf-styles')) {
-        //         const style = document.createElement('style');
-        //         style.id = 'zf-styles';
-        //         style.textContent = '.zf-loading{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;transition:opacity 0.3s}.zf-spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.3);border-top:3px solid #fff;border-radius:50%;animation:zf-spin 1s linear infinite;margin-bottom:12px}.zf-text{font-size:16px;font-weight:500;text-align:center;max-width:80%}@keyframes zf-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}';
-        //         document.head.appendChild(style);
-        //     }
+        // Inject script to detect fullscreen changes
+        const fullscreenDetectionScript = `
+        (function() {
+            // Track fullscreen state
+            let isInFullscreen = false;
+            
+            // Function to detect fullscreen changes
+            function detectFullscreenChange() {
+                const isFullscreen = !!(
+                    document.fullscreenElement || 
+                    document.webkitFullscreenElement ||
+                    document.mozFullScreenElement ||
+                    document.msFullscreenElement
+                );
+                
+                // Only send message if state changed
+                if (isFullscreen !== isInFullscreen) {
+                    isInFullscreen = isFullscreen;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'videoFullscreenChange',
+                        data: { isFullscreen }
+                    }));
+                }
+            }
+            
+            // Listen for fullscreen events
+            document.addEventListener('fullscreenchange', detectFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', detectFullscreenChange);
+            document.addEventListener('mozfullscreenchange', detectFullscreenChange);
+            document.addEventListener('MSFullscreenChange', detectFullscreenChange);
+            
+            // Enhanced video element handling
+            function enhanceVideoElements() {
+                const videos = document.querySelectorAll('video');
+                videos.forEach(video => {
+                    if (!video.hasFullscreenListener) {
+                        video.hasFullscreenListener = true;
+                        
+                        // Listen for entering fullscreen via HTML5 video API
+                        video.addEventListener('webkitbeginfullscreen', () => {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'videoFullscreenChange',
+                                data: { isFullscreen: true }
+                            }));
+                        });
+                        
+                        // Listen for exiting fullscreen via HTML5 video API
+                        video.addEventListener('webkitendfullscreen', () => {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'videoFullscreenChange',
+                                data: { isFullscreen: false }
+                            }));
+                        });
+                        
+                        // Add fullscreen change events for iOS
+                        video.addEventListener('enterpictureinpicture', () => {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'videoFullscreenChange',
+                                data: { isFullscreen: true }
+                            }));
+                        });
+                        
+                        video.addEventListener('leavepictureinpicture', () => {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                                type: 'videoFullscreenChange',
+                                data: { isFullscreen: false }
+                            }));
+                        });
+                    }
+                });
+            }
+            
+            // Handle common video player frameworks
+            function detectVideoPlayers() {
+                // YouTube embeds
+                const ytPlayers = document.querySelectorAll('.ytp-fullscreen-button, .youtube-player');
+                ytPlayers.forEach(btn => {
+                    if (!btn.hasClickListener) {
+                        btn.hasClickListener = true;
+                        btn.addEventListener('click', () => {
+                            // Small delay to ensure fullscreen state has changed
+                            setTimeout(detectFullscreenChange, 300);
+                        });
+                    }
+                });
+                
+                // JW Player
+                const jwPlayers = document.querySelectorAll('.jwplayer');
+                jwPlayers.forEach(player => {
+                    if (!player.hasFullscreenObserver) {
+                        player.hasFullscreenObserver = true;
+                        const observer = new MutationObserver(() => {
+                            const isFullscreen = player.classList.contains('jwplayer-fullscreen') || 
+                                                player.classList.contains('jw-flag-fullscreen');
+                            if (isFullscreen !== isInFullscreen) {
+                                isInFullscreen = isFullscreen;
+                                window.ReactNativeWebView.postMessage(JSON.stringify({
+                                    type: 'videoFullscreenChange',
+                                    data: { isFullscreen }
+                                }));
+                            }
+                        });
+                        observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+                    }
+                });
+                
+                // Vimeo
+                const vimeoPlayers = document.querySelectorAll('.vimeo-player, .vp-player-layout');
+                vimeoPlayers.forEach(player => {
+                    if (!player.hasFullscreenObserver) {
+                        player.hasFullscreenObserver = true;
+                        const observer = new MutationObserver(() => {
+                            const isFullscreen = player.classList.contains('in-fullscreen') || 
+                                                document.querySelector('.vp-full-screen');
+                            if (isFullscreen !== isInFullscreen) {
+                                isInFullscreen = isFullscreen;
+                                window.ReactNativeWebView.postMessage(JSON.stringify({
+                                    type: 'videoFullscreenChange',
+                                    data: { isFullscreen }
+                                }));
+                            }
+                        });
+                        observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+                    }
+                });
+            }
+            
+            // Initial enhancement
+            enhanceVideoElements();
+            detectVideoPlayers();
+            
+            // Continue to check for new video elements (for dynamically loaded content)
+            const observer = new MutationObserver(() => {
+                enhanceVideoElements();
+                detectVideoPlayers();
+            });
+            
+            observer.observe(document.body, { 
+                childList: true, 
+                subtree: true 
+            });
+            
+            // Handle fullscreen buttons directly
+            document.addEventListener('click', event => {
+                const target = event.target;
+                if (target && (
+                    target.classList.contains('fullscreen-button') || 
+                    target.closest('.fullscreen-button') ||
+                    target.classList.contains('vjs-fullscreen-control') ||
+                    target.getAttribute('title')?.toLowerCase().includes('fullscreen') ||
+                    target.getAttribute('aria-label')?.toLowerCase().includes('fullscreen')
+                )) {
+                    // Wait a moment for fullscreen to take effect
+                    setTimeout(detectFullscreenChange, 300);
+                }
+            }, true);
+        })();
+        true;
+        `;
 
-        //     // App state management
-        //     const app = {
-        //         formSubmitting: false,
-        //         loader: null,
-        //         show: function(message) {
-        //             this.hide();
-        //             const loader = document.createElement('div');
-        //             loader.className = 'zf-loading';
-
-        //             const spinner = document.createElement('div');
-        //             spinner.className = 'zf-spinner';
-
-        //             const text = document.createElement('div');
-        //             text.className = 'zf-text';
-        //             text.textContent = message || 'Processing...';
-
-        //             loader.appendChild(spinner);
-        //             loader.appendChild(text);
-        //             document.body.appendChild(loader);
-        //             this.loader = loader;
-        //         },
-        //         hide: function() {
-        //             if (this.loader) {
-        //                 this.loader.style.opacity = '0';
-        //                 setTimeout(() => {
-        //                     if (this.loader && this.loader.parentNode) {
-        //                         this.loader.parentNode.removeChild(this.loader);
-        //                         this.loader = null;
-        //                     }
-        //                 }, 300);
-        //             }
-        //         }
-        //     };
-
-        //     // Form submission handling
-        //     function setupFormHandling() {
-        //         // Store current URL
-        //         let currentUrl = location.href;
-
-        //         // Handle all forms with event delegation
-        //         document.addEventListener('submit', function(e) {
-        //             if (e.target.tagName === 'FORM') {
-        //                 // Prevent double submissions
-        //                 if (app.formSubmitting) {
-        //                     e.preventDefault();
-        //                     return;
-        //                 }
-
-        //                 app.formSubmitting = true;
-        //                 app.show('Submitting form...');
-
-        //                 // Update UI for submit buttons
-        //                 const buttons = e.target.querySelectorAll('button[type="submit"], input[type="submit"]');
-        //                 buttons.forEach(btn => {
-        //                     btn.disabled = true;
-        //                     btn.style.opacity = '0.7';
-        //                     btn.dataset.originalText = btn.tagName === 'BUTTON' ? btn.innerHTML : btn.value;
-        //                     if (btn.tagName === 'BUTTON') {
-        //                         btn.innerHTML = '<span>Please wait...</span>';
-        //                     } else {
-        //                         btn.value = 'Please wait...';
-        //                     }
-        //                 });
-
-        //                 // Handle form submission - check for completion
-        //                 const checkFormStatus = () => {
-        //                     // Check for URL change (success case)
-        //                     if (currentUrl !== location.href) {
-        //                         currentUrl = location.href;
-        //                         window.ReactNativeWebView.postMessage(JSON.stringify({
-        //                             type: 'formSuccess',
-        //                             data: { newUrl: location.href }
-        //                         }));
-        //                         return;
-        //                     }
-
-        //                     // Check for errors
-        //                     const errorElements = document.querySelectorAll('.error, .alert-danger, .invalid-feedback, [role="alert"]');
-        //                     if (errorElements.length > 0) {
-        //                         app.hide();
-        //                         app.formSubmitting = false;
-
-        //                         // Restore buttons
-        //                         buttons.forEach(btn => {
-        //                             btn.disabled = false;
-        //                             btn.style.opacity = '1';
-        //                             if (btn.tagName === 'BUTTON' && btn.dataset.originalText) {
-        //                                 btn.innerHTML = btn.dataset.originalText;
-        //                             } else if (btn.dataset.originalText) {
-        //                                 btn.value = btn.dataset.originalText;
-        //                             }
-        //                         });
-
-        //                         // Report errors
-        //                         window.ReactNativeWebView.postMessage(JSON.stringify({
-        //                             type: 'formError',
-        //                             data: { 
-        //                                 errors: Array.from(errorElements).map(el => el.textContent.trim()),
-        //                                 formId: e.target.id || ''
-        //                             }
-        //                         }));
-        //                     }
-        //                 };
-
-        //                 // Start monitoring with intervals
-        //                 const checkInterval = setInterval(() => {
-        //                     if (currentUrl !== location.href) {
-        //                         // Success - URL changed
-        //                         clearInterval(checkInterval);
-        //                         app.formSubmitting = false;
-        //                         setTimeout(() => app.hide(), 500); // Allow time for navigation
-        //                     } else if (!app.formSubmitting) {
-        //                         // Form was already processed
-        //                         clearInterval(checkInterval);
-        //                     } else {
-        //                         // Keep checking for a reasonable time
-        //                         checkFormStatus();
-        //                     }
-        //                 }, 300);
-
-        //                 // Set a timeout to stop checking
-        //                 setTimeout(() => {
-        //                     clearInterval(checkInterval);
-        //                     if (app.formSubmitting) {
-        //                         app.formSubmitting = false;
-        //                         app.hide();
-
-        //                         // Restore buttons
-        //                         buttons.forEach(btn => {
-        //                             btn.disabled = false;
-        //                             btn.style.opacity = '1';
-        //                             if (btn.tagName === 'BUTTON' && btn.dataset.originalText) {
-        //                                 btn.innerHTML = btn.dataset.originalText;
-        //                             } else if (btn.dataset.originalText) {
-        //                                 btn.value = btn.dataset.originalText;
-        //                             }
-        //                         });
-        //                     }
-        //                 }, 15000); // 15 seconds timeout
-        //             }
-        //         }, true);
-
-        //         // Handle navigation events
-        //         window.addEventListener('beforeunload', function() {
-        //             if (app.formSubmitting) {
-        //                 app.show('Navigating...');
-        //             }
-        //         });
-
-        //         window.addEventListener('pageshow', function() {
-        //             app.formSubmitting = false;
-        //             app.hide();
-        //             currentUrl = location.href;
-        //         });
-        //     }
-
-        //     // Handle direct submit button clicks
-        //     document.addEventListener('click', function(e) {
-        //         if ((e.target.tagName === 'BUTTON' && e.target.type === 'submit') || 
-        //             (e.target.tagName === 'INPUT' && e.target.type === 'submit')) {
-        //             if (!app.formSubmitting) {
-        //                 e.target.style.opacity = '0.8';
-        //             }
-        //         }
-        //     }, true);
-
-        //     // Initialize
-        //     setupFormHandling();
-
-        //     // Set webview flag cookie to help with backend detection
-        //     document.cookie = "webview=true; path=/;";
-        // })();
-        // true;
-        // `;
-
-        // webViewRef.current?.injectJavaScript(professionalFormHandlerJS);
+        webViewRef.current?.injectJavaScript(fullscreenDetectionScript);
     };
 
     // Handle form success with navigation feedback
@@ -800,7 +585,7 @@ export default function WebViewScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar style="auto" />
+            <StatusBar style="auto" hidden={statusBarHidden} />
             <WebView
                 ref={webViewRef}
                 source={{ uri: WEBSITE_URL }}
@@ -810,7 +595,6 @@ export default function WebViewScreen() {
                 startInLoadingState={true}
                 onLoadStart={() => setIsLoading(true)}
                 onLoadEnd={handleWebViewLoad}
-                // injectedJavaScript={observeDomForFileInputs}
                 onMessage={handleMessage}
                 allowsFullscreenVideo={true}
                 allowsInlineMediaPlayback={true}
