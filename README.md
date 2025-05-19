@@ -1,50 +1,99 @@
-# Welcome to your Expo app 👋
+# ZynoflixOTT Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile application for Android and iOS that displays the ZynoflixOTT website (zynoflixott.com) in a WebView with native capabilities for handling file uploads.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Displays the ZynoflixOTT website in a native mobile application
+- Handles back navigation for Android devices
+- Supports full multimedia playback
+- Implements native file upload capabilities:
+  - Image selection from the device gallery
+  - Video selection from the device gallery
+  - Document selection for other file types
+- Automatic permission handling for media access
 
+## Development Setup
+
+### Prerequisites
+
+- Node.js (v18 or newer)
+- npm or yarn
+- Expo CLI (`npm install -g expo-cli`)
+- For iOS: macOS with Xcode installed
+- For Android: Android Studio with Android SDK
+
+### Installation
+
+1. Clone this repository
+2. Install dependencies:
    ```bash
    npm install
    ```
-
-2. Start the app
-
+3. Start the development server:
    ```bash
-   npx expo start
+   npm start
    ```
+4. Follow the instructions in the terminal to run on a simulator/emulator or physical device
 
-In the output, you'll find options to open the app in a
+### Building for Production
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+#### Android APK
 
 ```bash
-npm run reset-project
+npm run android
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Then follow the Expo EAS build instructions:
 
-## Learn more
+```bash
+npx eas build --platform android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+#### iOS IPA
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm run ios
+```
 
-## Join the community
+Then follow the Expo EAS build instructions:
 
-Join our community of developers creating universal apps.
+```bash
+npx eas build --platform ios
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## File Upload Implementation
+
+The app intercepts file input clicks on the website and handles them with native pickers:
+
+1. When a user clicks on a file input element on the website, the event is captured
+2. Based on the accepted file types, the appropriate native picker is presented
+3. After selection, file data is sent back to the WebView via custom events
+
+## Permissions
+
+The app requests the following permissions:
+
+### Android
+- Camera access
+- Read external storage
+- Write external storage
+- Record audio
+
+### iOS
+- Camera access
+- Photo library access
+- Microphone access
+
+## Technology Stack
+
+- React Native
+- Expo
+- React Navigation
+- WebView
+- Expo Document Picker
+- Expo Image Picker
+
+## License
+
+[Your License Here]

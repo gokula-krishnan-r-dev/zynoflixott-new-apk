@@ -1,22 +1,35 @@
 {
   "expo": {
-    "name": "new-zynoflixott",
-    "slug": "new-zynoflixott",
+    "name": "ZynoflixOTT",
+    "slug": "zynoflixott",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "newzynoflixott",
+    "scheme": "zynoflixott",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zynoflix.ott",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to your camera to upload photos or videos to ZynoflixOTT.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload photos or videos to ZynoflixOTT.",
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record videos to upload to ZynoflixOTT."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.zynoflix.ott",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -32,6 +45,19 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app needs access to your photos to allow you to upload images to ZynoflixOTT.",
+          "cameraPermission": "This app needs access to your camera to capture photos for upload to ZynoflixOTT."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
         }
       ]
     ],
