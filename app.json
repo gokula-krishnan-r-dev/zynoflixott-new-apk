@@ -8,7 +8,7 @@
     "splash": {
       "image": "./assets/images/appstore.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2c1157"
+      "backgroundColor": "#000000"
     },
     "icon": "./assets/images/appstore.png",
     "scheme": "zynoflixott",
@@ -47,10 +47,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/appstore.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#2c1157"
+          "backgroundColor": "#000000"
         }
       ],
       [

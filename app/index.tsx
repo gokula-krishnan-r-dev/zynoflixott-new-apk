@@ -653,6 +653,7 @@ function WebViewContainer({
                 applicationNameForUserAgent="ZynoflixApp"
                 textZoom={100}
                 scrollEnabled={true}
+                renderLoading={() => <View style={styles.loadingContainer} />}
                 useSharedProcessPool={true}
                 cacheMode="LOAD_CACHE_ELSE_NETWORK"
                 originWhitelist={['*']}
@@ -665,7 +666,7 @@ function WebViewContainer({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#2c1157',
+        backgroundColor: '#000',
     },
     webView: {
         flex: 1,
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F5FCFF88',
+        backgroundColor: '#000',
         zIndex: 1,
     },
 }); 
