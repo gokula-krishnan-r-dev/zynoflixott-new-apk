@@ -57,7 +57,7 @@ const SplashScreen = ({ onFinish }: SplashScreenProps) => {
     return (
         <View style={styles.container}>
             <Animated.View style={[styles.logoContainer, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-                <Image source={require('../assets/images/appstore.png')} style={styles.logo} />
+                <Image source={require('../assets/images/logo.png')} style={styles.logo} />
             </Animated.View>
 
             <Animated.View
