@@ -2,11 +2,17 @@
   "expo": {
     "name": "ZynoflixOTT",
     "slug": "zynoflixott",
-    "version": "1.0.0",
+    "version": "1.7.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "backgroundColor": "#2c1157",
+    "splash": {
+      "image": "./assets/images/appstore.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2c1157"
+    },
+    "icon": "./assets/images/appstore.png",
     "scheme": "zynoflixott",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -19,8 +25,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/appstore.png",
+        "backgroundColor": "#2c1157"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.zynoflix.ott",
@@ -28,14 +34,13 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/appstore.png"
     },
     "plugins": [
       "expo-router",
@@ -43,9 +48,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/logo.png",
-          "imageWidth": 200,
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#2c1157"
         }
       ],
       [
@@ -68,8 +73,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d809d759-4bfc-48cf-9040-6299477f4e34"
+        "projectId": "a5a1c43b-d852-4471-aa56-bbf4e27fa8d3"
       }
-    }
+    },
+    "owner": "56pooja_kumari-5"
   }
 }

@@ -4,7 +4,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler, Platform, SafeAreaView, StyleSheet, ToastAndroid } from 'react-native';
+import { Alert, BackHandler, Platform, StyleSheet, ToastAndroid, View } from 'react-native';
+import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
 const WEBSITE_URL = 'https://zynoflixott.com';
@@ -584,7 +585,52 @@ export default function WebViewScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+            <WebViewContainer
+                webViewRef={webViewRef}
+                isLoading={isLoading}
+                setIsLoading={setIsLoading}
+                handleWebViewLoad={handleWebViewLoad}
+                handleMessage={handleMessage}
+                isVideoFullscreen={isVideoFullscreen}
+                statusBarHidden={statusBarHidden}
+            />
+        </SafeAreaProvider>
+    );
+}
+
+// Separate component to access insets
+function WebViewContainer({
+    webViewRef,
+    isLoading,
+    setIsLoading,
+    handleWebViewLoad,
+    handleMessage,
+    isVideoFullscreen,
+    statusBarHidden
+}: {
+    webViewRef: React.RefObject<WebView | null>,
+    isLoading: boolean,
+    setIsLoading: (loading: boolean) => void,
+    handleWebViewLoad: () => void,
+    handleMessage: (event: any) => void,
+    isVideoFullscreen: boolean,
+    statusBarHidden: boolean
+}) {
+    const insets = useSafeAreaInsets();
+
+    // Dynamically adjust safe area based on fullscreen status
+    const containerStyle = {
+        ...styles.container,
+        // When in fullscreen video mode, ignore safe areas to use full screen
+        paddingTop: isVideoFullscreen ? 0 : insets.top,
+        paddingBottom: isVideoFullscreen ? 0 : insets.bottom,
+        paddingLeft: isVideoFullscreen ? 0 : insets.left,
+        paddingRight: isVideoFullscreen ? 0 : insets.right,
+    };
+
+    return (
+        <View style={containerStyle}>
             <StatusBar style="auto" hidden={statusBarHidden} />
             <WebView
                 ref={webViewRef}
@@ -612,14 +658,14 @@ export default function WebViewScreen() {
                 originWhitelist={['*']}
                 decelerationRate={0.998}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'transparent',
+        backgroundColor: '#2c1157',
     },
     webView: {
         flex: 1,
