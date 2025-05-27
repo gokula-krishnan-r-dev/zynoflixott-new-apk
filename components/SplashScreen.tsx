@@ -1,4 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
+import {
+    JosefinSans_300Light,
+    JosefinSans_400Regular,
+    JosefinSans_600SemiBold,
+    JosefinSans_700Bold,
+    useFonts
+} from '@expo-google-fonts/josefin-sans';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, Image, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { ThemedText } from './ThemedText';
@@ -10,6 +16,14 @@ interface SplashScreenProps {
 }
 
 const SplashScreen = ({ onFinish }: SplashScreenProps) => {
+    // Load fonts
+    const [fontsLoaded] = useFonts({
+        JosefinSans_400Regular,
+        JosefinSans_700Bold,
+        JosefinSans_600SemiBold,
+        JosefinSans_300Light
+    });
+
     // Animation values
     const logoOpacity = useRef(new Animated.Value(0)).current;
     const logoScale = useRef(new Animated.Value(0.3)).current;
@@ -27,6 +41,8 @@ const SplashScreen = ({ onFinish }: SplashScreenProps) => {
     });
 
     useEffect(() => {
+        if (!fontsLoaded) return;
+
         // Fade in background first
         Animated.timing(backgroundOpacity, {
             toValue: 1,
@@ -103,20 +119,28 @@ const SplashScreen = ({ onFinish }: SplashScreenProps) => {
             // Callback when animation sequence is complete
             setTimeout(onFinish, 400);
         });
-    }, []);
+    }, [fontsLoaded]);
+
+    if (!fontsLoaded) {
+        return (
+            <View style={styles.loadingContainer}>
+                <StatusBar translucent backgroundColor="transparent" />
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
             <StatusBar translucent backgroundColor="transparent" />
 
-            <Animated.View style={[styles.background, { opacity: backgroundOpacity }]}>
+            {/* <Animated.View style={[styles.background, { opacity: backgroundOpacity }]}>
                 <LinearGradient
                     colors={['#1a0533', '#2c1157', '#4b1d9e']}
                     style={styles.gradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 />
-            </Animated.View>
+            </Animated.View> */}
 
             {/* Animated background particles */}
             <View style={styles.particles}>
@@ -186,8 +210,19 @@ const styles = StyleSheet.create({
         zIndex: 10,
         overflow: 'hidden',
     },
+    loadingContainer: {
+        flex: 1,
+        backgroundColor: '#2c1157',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10,
+    },
     background: {
         ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#000000',
     },
     gradient: {
         ...StyleSheet.absoluteFillObject,
@@ -231,7 +266,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 34,
         fontWeight: 'bold',
-        fontFamily: 'System',
+        fontFamily: 'JosefinSans_700Bold',
         letterSpacing: 1.5,
         marginBottom: 12,
         color: '#FFFFFF',
@@ -243,11 +278,12 @@ const styles = StyleSheet.create({
     ottText: {
         color: '#9C27B0',
         fontWeight: '900',
+        fontFamily: 'JosefinSans_700Bold',
         letterSpacing: 3,
     },
     subtitle: {
         fontSize: 16,
-        fontFamily: 'System',
+        fontFamily: 'JosefinSans_400Regular',
         color: '#e0e0e0',
         letterSpacing: 0.5,
         fontWeight: '500',
