@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
     },
     ottText: {
-        color: '#ff9e3f',
+        color: '#9C27B0',
         fontWeight: '900',
         letterSpacing: 3,
     },
